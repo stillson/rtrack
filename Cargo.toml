@@ -1,0 +1,13 @@
+[package]
+name = "rtrack"
+version = "0.2.0"
+authors = ["Chris Stillson <stillson@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+structopt = "0.3.13"
+log = "0.4.14"
+text-diff = "0.4.0"
+glob = "0.3.0"
