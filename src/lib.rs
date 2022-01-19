@@ -37,6 +37,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use log::{error, trace};
 use text_diff::{diff, print_diff, Difference};
 
 use crate::TrackReturn::{DiffRet, Rval};
@@ -57,27 +58,38 @@ const TRACK_DIR: &str = ".track";
 
 /// Central dispatch function
 pub fn handle_track(args: TrackCommand) -> Result<TrackReturn, &'static str> {
-    //eprintln!("{:?}", args);
+    trace!("handle_track: {:?}", args);
 
     match args {
         TrackCommand::Commit(path) => match handle_checkin(&path) {
             Ok(i) => Ok(Rval(i)),
-            Err(e) => Err(e),
+            Err(e) => {
+                error!("{}", e);
+                Err(e)
+            }
         },
         TrackCommand::Diff(path) => match handle_diff(&path) {
             Ok((i, v)) => Ok(DiffRet(i, v)),
-            Err(e) => Err(e),
+            Err(e) => {
+                error!("{}", e);
+                Err(e)
+            }
         },
     }
 }
 
 /// Function to handle a checkin
 fn handle_checkin(file_name: &Path) -> Result<i32, &'static str> {
-    // eprintln!("file:   {:?}", file_name);
-    // eprintln!("pwd(hc):{:?}", std::env::current_dir());
-    // create .track directory if needed
+    trace!("hc-file:   {:?}", file_name);
+    trace!("hc-pwd(hc):{:?}", std::env::current_dir());
 
+    // create .track directory if needed
     if !file_name.exists() {
+        error!(
+            "handle_checkin: file doesn't exist {} in {}",
+            file_name.to_str().unwrap(),
+            std::env::current_dir().unwrap().to_str().unwrap()
+        );
         return Err("File doesn't exist.");
     }
 
@@ -86,7 +98,7 @@ fn handle_checkin(file_name: &Path) -> Result<i32, &'static str> {
 
     if !track_dir.exists() {
         if let Err(e) = fs::create_dir(track_dir) {
-            eprintln!("{}", e.to_string());
+            error!("{}", e.to_string());
             return Err("error creating dir");
         }
     }
@@ -104,12 +116,14 @@ fn handle_checkin(file_name: &Path) -> Result<i32, &'static str> {
         let mut check_path = PathBuf::new();
         check_path.push(TRACK_DIR);
         check_path.push(f_name);
+        trace!("{:?}", check_path);
         if !check_path.exists() {
             fs::copy(file_name, check_path).expect("copy failed");
             return Ok(0);
         }
     }
 
+    error!("Unable to copy file: {}", pre_f_name);
     Err("Unable to copy file.")
 }
 
@@ -119,6 +133,7 @@ fn handle_diff(file_name: &Path) -> Result<(i32, Vec<Difference>), &'static str>
     track_dir.push(TRACK_DIR);
 
     if !track_dir.exists() {
+        error!("No .track directory");
         return Err("No track repository");
     }
 
