@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 //! Extra simple source code control.
 //!
 //!  Rtrack is a extremly simple source control system. Basically, it
@@ -64,14 +65,14 @@ pub fn handle_track(args: TrackCommand) -> Result<TrackReturn, &'static str> {
         TrackCommand::Commit(path) => match handle_checkin(&path) {
             Ok(i) => Ok(Rval(i)),
             Err(e) => {
-                error!("{}", e);
+                error!("error in handle_track()/commit: {}", e);
                 Err(e)
             }
         },
         TrackCommand::Diff(path) => match handle_diff(&path) {
             Ok((i, v)) => Ok(DiffRet(i, v)),
             Err(e) => {
-                error!("{}", e);
+                error!("error in handle_track()/diff: {}", e);
                 Err(e)
             }
         },
@@ -80,8 +81,8 @@ pub fn handle_track(args: TrackCommand) -> Result<TrackReturn, &'static str> {
 
 /// Function to handle a checkin
 fn handle_checkin(file_name: &Path) -> Result<i32, &'static str> {
-    trace!("hc-file:   {:?}", file_name);
-    trace!("hc-pwd(hc):{:?}", std::env::current_dir());
+    trace!("handle_checkin() file:   {:?}", file_name);
+    trace!("handle_checkin() cwd():{:?}", std::env::current_dir());
 
     // create .track directory if needed
     if !file_name.exists() {
@@ -97,17 +98,21 @@ fn handle_checkin(file_name: &Path) -> Result<i32, &'static str> {
     track_dir.push(TRACK_DIR);
 
     if !track_dir.exists() {
-        if let Err(e) = fs::create_dir(track_dir) {
-            error!("{}", e.to_string());
+        if let Err(e) = fs::create_dir(&track_dir) {
+            error!(
+                "cannot create track dir at {:?}, error: {}",
+                &track_dir,
+                e.to_string()
+            );
             return Err("error creating dir");
         }
     }
 
     let pre_f_name = file_name
         .file_name()
-        .expect("bad filename 1")
+        .expect("handle_checkin(): bad filename 1")
         .to_str()
-        .expect("bad filename 2")
+        .expect("handle_checkin bad filename 2")
         .to_owned();
 
     for i in 1..1000 {
@@ -118,12 +123,12 @@ fn handle_checkin(file_name: &Path) -> Result<i32, &'static str> {
         check_path.push(f_name);
         trace!("{:?}", check_path);
         if !check_path.exists() {
-            fs::copy(file_name, check_path).expect("copy failed");
+            fs::copy(file_name, check_path).expect("handle_checkin(): copy failed");
             return Ok(0);
         }
     }
 
-    error!("Unable to copy file: {}", pre_f_name);
+    error!("handle_checkin(): Unable to copy file: {}", pre_f_name);
     Err("Unable to copy file.")
 }
 
@@ -139,9 +144,9 @@ fn handle_diff(file_name: &Path) -> Result<(i32, Vec<Difference>), &'static str>
 
     let mut f_name = file_name
         .file_name()
-        .expect("bad filename")
+        .expect("handle_diff(): bad filename 1")
         .to_str()
-        .expect("bad file name;")
+        .expect("handle_diff(): bad filename 2")
         .to_owned();
 
     f_name.push_str(".*");
@@ -149,23 +154,28 @@ fn handle_diff(file_name: &Path) -> Result<(i32, Vec<Difference>), &'static str>
     check_path.push(TRACK_DIR);
     check_path.push(f_name);
 
+    trace!("handle_diff() check_path: {:?}", check_path);
     // need to sort this somehow....
-    let f = glob::glob(check_path.to_str().expect("oops"))
+    let f = glob::glob(check_path.to_str().expect("handle_diff() bad path to str"))
         .unwrap()
         .last()
         .unwrap();
 
-    let mut orig = File::open(file_name).unwrap();
+    let mut orig = File::open(file_name).expect("handle_diff(): error opening file");
     let mut orig_cont = String::new();
     if let Err(res) = orig.read_to_string(&mut orig_cont) {
-        eprintln!("Scream and shout and run about!");
+        error!("Unable to read file {:?}", file_name);
+        eprintln!("Unable to read file {:?}", file_name);
         eprintln!("{}", res.to_string());
-        return Err("Scream and shout and run about"); // FIXME
+        return Err("handle_diff(): unable to read file 1");
     }
 
-    let mut edit = File::open(f.unwrap()).unwrap();
+    let other_file = f.expect("Error generating file name");
+    let mut edit = File::open(other_file.clone()).unwrap();
     let mut edit_cont = String::new();
     if let Err(res) = edit.read_to_string(&mut edit_cont) {
+        error!("Unable to read file {:?}", other_file);
+        eprintln!("Unable to read file {:?}", other_file);
         eprintln!("{}", res.to_string());
         return Err("Shout and Scream and never dream!"); // Fixme
     }
@@ -264,7 +274,7 @@ mod tests {
         assert!(r1.exists());
         assert!(!r2.exists());
 
-        let rv = handle_checkin(&Path::new(TEST_FILE));
+        let rv = handle_checkin(Path::new(TEST_FILE));
 
         match rv {
             Ok(_) => {}
@@ -276,7 +286,7 @@ mod tests {
 
         assert!(r2.exists());
 
-        let rv = handle_checkin(&Path::new((String::from("bad_") + TEST_FILE).as_str()));
+        let rv = handle_checkin(Path::new((String::from("bad_") + TEST_FILE).as_str()));
 
         match rv {
             Ok(_) => {
@@ -292,17 +302,17 @@ mod tests {
     fn test_handle_diff() {
         let (_dir, _file_path) = test_setup();
 
-        let rv1 = handle_diff(&Path::new(TEST_FILE));
+        let rv1 = handle_diff(Path::new(TEST_FILE));
         if rv1.is_ok() {
             panic!()
         }
 
-        let rv2 = handle_checkin(&Path::new(TEST_FILE));
+        let rv2 = handle_checkin(Path::new(TEST_FILE));
         if rv2.is_err() {
             panic!()
         }
 
-        let rv3 = handle_diff(&Path::new(TEST_FILE));
+        let rv3 = handle_diff(Path::new(TEST_FILE));
         match rv3 {
             Ok((i, _v)) => {
                 if i != 0 {

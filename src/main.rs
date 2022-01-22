@@ -1,4 +1,5 @@
 #![deny(clippy::all)]
+extern crate env_logger;
 #[macro_use]
 extern crate log;
 
@@ -32,7 +33,8 @@ impl Cli {
 }
 
 fn main() {
-    info!("rtrack started");
+    env_logger::init();
+    info!("rtrack 0.2.0 started");
 
     let args = Cli::from_args();
 
@@ -40,8 +42,9 @@ fn main() {
         Ok(TrackReturn::Rval(rv)) => rv,
         Ok(TrackReturn::DiffRet(rv, _)) => rv,
         Err(e) => {
+            error!("error in main: {}", e);
             eprintln!("{}", e);
-            0
+            -1
         }
     };
 }
